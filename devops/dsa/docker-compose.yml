@@ -50,40 +50,8 @@ services:
       # local source files.  Adding the editable egg directories first allows
       # allow mounting source files from the host without breaking the internal
       # data.
-
-      # - /opt/girder/girder.egg-info
-      # - /opt/girder/clients/python/girder_client.egg-info
-      # - ../../../girder:/opt/girder
-
-      # - /opt/girder_worker/girder_worker.egg-info
-      # - ../../../../girder_worker:/opt/girder_worker
-
-      # - /opt/girder_worker_utils/girder_worker_utils.egg-info
-      # - ../../../../girder_worker_utils:/opt/girder_worker_utils
-
       # - /opt/HistomicsUI/histomicsui.egg-info
       # - ../../../HistomicsUI:/opt/HistomicsUI
-
-      # - /opt/slicer_cli_web/girder_slicer_cli_web.egg-info
-      # - ../../../slicer_cli_web:/opt/slicer_cli_web
-
-      # - /opt/large_image/girder_annotation/girder_large_image_annotation.egg-info
-      # - /opt/large_image/girder/girder_large_image.egg-info
-      # - /opt/large_image/sources/bioformats/large_image_source_bioformats.egg-info
-      # - /opt/large_image/sources/openslide/large_image_source_openslide.egg-info
-      # - /opt/large_image/sources/ometiff/large_image_source_ometiff.egg-info
-      # - /opt/large_image/sources/pil/large_image_source_pil.egg-info
-      # - /opt/large_image/sources/test/large_image_source_test.egg-info
-      # - /opt/large_image/sources/dummy/large_image_source_dummy.egg-info
-      # - /opt/large_image/sources/tiff/large_image_source_tiff.egg-info
-      # - /opt/large_image/sources/mapnik/large_image_source_mapnik.egg-info
-      # - /opt/large_image/sources/openjpeg/large_image_source_openjpeg.egg-info
-      # - /opt/large_image/sources/gdal/large_image_source_gdal.egg-info
-      # - /opt/large_image/sources/nd2/large_image_source_nd2.egg-info
-      # - /opt/large_image/large_image.egg-info
-      # - /opt/large_image/utilities/converter/large_image_converter.egg-info
-      # - /opt/large_image/utilities/tasks/large_image_tasks.egg-info
-      # - ../../../large_image:/opt/large_image
 
       # Add additional mounts here to get access to existing files on your
       # system.  Also add them to the worker container to reduce copying.
@@ -92,6 +60,12 @@ services:
       - memcached
       - rabbitmq
     command: /opt/digital_slide_archive/devops/dsa/start_girder.sh
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/system/version"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   mongodb:
     image: "mongo:latest"
     # Set DSA_USER to your user id (e.g., `DSA_USER=$(id -u):$(id -g)`)
@@ -112,6 +86,12 @@ services:
       options:
         max-size: "10M"
         max-file: "5"
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   memcached:
     image: memcached
     command: -m 4096 --max-item-size 8M
@@ -123,6 +103,12 @@ services:
       options:
         max-size: "10M"
         max-file: "5"
+    healthcheck:
+      test: ["CMD", "bash", "-c", 'exec 3<>/dev/tcp/localhost/11211; printf "stats\nquit\n" >&3; cat <&3']
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   rabbitmq:
     image: "rabbitmq:latest"
     restart: unless-stopped
@@ -138,6 +124,11 @@ services:
       options:
         max-size: "10M"
         max-file: "5"
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
   worker:
     image: dsarchive/dsa_common
     build: ../..
@@ -167,6 +158,12 @@ services:
     depends_on:
       - rabbitmq
     command: /opt/digital_slide_archive/devops/dsa/start_worker.sh
+    healthcheck:
+      test: ["CMD", "celery", "-b", "amqp://rabbitmq:5672", "inspect", "ping"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     logging:
       options:
         max-size: "10M"
